@@ -1,9 +1,9 @@
 {
   "name": "Mohamad SkyStream Repo",
-  "id": "com.mohamad.skystream.repo",
-  "packageName": "com.mohamad.skystream.repo",
+  "id": "mohamad.skystream.repo",
+  "description": "FaselHD Provider Repository",
   "manifestVersion": 1,
-  "pluginLists": [
+  "repos": [
     "https://raw.githubusercontent.com/Mohamadwwg/faselhd-skystream/main/dist/plugins.json"
   ]
 }

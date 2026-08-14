@@ -1,7 +1,7 @@
 {
-  "name": "Mohamad SkyStream Repo",
-  "id": "com.mohamad.skystream.repo",
-  "packageName": "com.mohamad.skystream.repo",
+  "name": "FaselHD Repository",
+  "id": "com.mohamad.faselhd.repo",
+  "description": "FaselHD Provider für SkyStream",
   "manifestVersion": 1,
   "plugins": [
     {
