@@ -1,21 +1,20 @@
-{
-  "name": "FaselHD Repository",
-  "id": "com.mohamad.faselhd.repo",
-  "description": "FaselHD Provider für SkyStream",
-  "manifestVersion": 1,
-  "plugins": [
-    {
-      "name": "FaselHD",
-      "id": "com.mohamad.faselhd",
-      "packageName": "com.mohamad.faselhd",
-      "version": 1,
-      "baseUrl": "https://web31312x.faselhdx.bid",
-      "iconUrl": "https://www.faselhd.center/favicon.ico",
-      "authors": ["Mohamadwwg"],
-      "description": "FaselHD Provider",
-      "languages": ["ar"],
-      "categories": ["movies", "series"],
-      "url": "https://raw.githubusercontent.com/Mohamadwwg/faselhd-skystream/main/dist/com.mohamad.faselhd.sky"
-    }
-  ]
-}
+[
+  {
+    "packageName": "com.mohamad.faselhd",
+    "name": "FaselHD",
+    "version": 1,
+    "baseUrl": "https://web31312x.faselhdx.bid",
+    "description": "FaselHD Provider for SkyStream",
+    "authors": [
+      "Mohamadwwg"
+    ],
+    "languages": [
+      "ar"
+    ],
+    "categories": [
+      "Movie",
+      "TvSeries"
+    ],
+    "url": "https://raw.githubusercontent.com/Mohamadwwg/faselhd-skystream/main/dist/com.mohamad.faselhd.sky"
+  }
+]
