@@ -1,0 +1,24 @@
+{
+  "packageName": "com.mohamad.faselhd",
+  "name": "FaselHD",
+  "version": 1,
+  "description": "FaselHD provider for SkyStream",
+  "authors": [
+    "Mo"
+  ],
+  "languages": [
+    "ar"
+  ],
+  "categories": [
+    "Movies",
+    "TV"
+  ],
+  "baseUrl": "https://web31312x.faselhdx.bid",
+  "domains": [
+    {
+      "name": "web31312x.faselhdx.bid",
+      "url": "https://web31312x.faselhdx.bid"
+    }
+  ],
+  "icon": "https://raw.githubusercontent.com/Abodabodd/re-3arabi/main/img/faselhd.png"
+}

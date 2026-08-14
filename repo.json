@@ -1,0 +1,12 @@
+{
+  "name": "FaselHD SkyStream",
+  "description": "FaselHD SkyStream extension",
+  "plugins": [
+    {
+      "name": "FaselHD",
+      "packageName": "com.mohamad.faselhd",
+      "version": "1.0.0",
+      "url": "FaselHD/plugin.js"
+    }
+  ]
+}
