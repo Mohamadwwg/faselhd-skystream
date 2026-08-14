@@ -4,7 +4,8 @@
     "name": "FaselHD",
     "version": 1,
     "baseUrl": "https://web31312x.faselhdx.bid",
-    "description": "FaselHD Provider for SkyStream",
+    "iconUrl": "https://www.faselhd.center/favicon.ico",
+    "description": "FaselHD Provider",
     "authors": [
       "Mohamadwwg"
     ],
@@ -12,8 +13,8 @@
       "ar"
     ],
     "categories": [
-      "Movie",
-      "TvSeries"
+      "movies",
+      "series"
     ],
     "url": "https://raw.githubusercontent.com/Mohamadwwg/faselhd-skystream/main/dist/com.mohamad.faselhd.sky"
   }
