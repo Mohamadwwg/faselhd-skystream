@@ -3,6 +3,6 @@
   "description": "FaselHD Provider für SkyStream",
   "manifestVersion": 1,
   "pluginLists": [
-    "https://raw.githubusercontent.com/Mohamadwwg/faselhd-skystream/main/FaselHD/plugin.json"
+    "https://raw.githubusercontent.com/Mohamadwwg/faselhd-skystream/main/dist/plugins.json"
   ]
 }

@@ -1,11 +1,12 @@
 {
   "name": "FaselHD",
-  "id": "com.mohamad.faselhd",
+  "packageName": "com.mohamad.faselhd",
   "version": 1,
-  "pluginUrl": "https://raw.githubusercontent.com/Mohamadwwg/faselhd-skystream/main/FaselHD/plugin.js",
+  "baseUrl": "https://web31312x.faselhdx.bid",
   "iconUrl": "https://www.faselhd.center/favicon.ico",
   "authors": ["Mohamadwwg"],
-  "description": "FaselHD Provider",
-  "language": "ar",
-  "status": 1
-}
+  "description": "FaselHD Provider for SkyStream",
+  "languages": ["ar"],
+  "categories": ["movies", "series"],
+  "main": "plugin.js"
+}   
