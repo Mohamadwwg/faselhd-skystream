@@ -1,7 +1,6 @@
 {
   "name": "Mohamad SkyStream Repo",
   "description": "FaselHD Provider für SkyStream",
-  "manifestVersion": 1,
   "plugins": [
     {
       "id": "com.mohamad.faselhd",
@@ -13,7 +12,6 @@
       "iconUrl": "https://www.faselhd.center/favicon.ico",
       "authors": ["Mohamadwwg"],
       "description": "FaselHD Provider",
-      "language": "ar",
       "languages": ["ar"],
       "categories": ["movies", "series"],
       "url": "https://raw.githubusercontent.com/Mohamadwwg/faselhd-skystream/main/dist/com.mohamad.faselhd.sky",
