@@ -1,123 +1,79 @@
 const PluginModule = (() => {
-    const mainUrl = "https://web31312x.faselhdx.bid";
-    const userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
-    let redirectUrl = null;
+    const mainUrl = "https://hdfilme.win";
+    const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
     function getHeaders(referer = null) {
         const headers = {
             "User-Agent": userAgent,
-            "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
-            "sec-ch-ua-mobile": "?1",
-            "sec-ch-ua-platform": '"Android"',
-            "upgrade-insecure-requests": "1",
-            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "sec-fetch-site": "none",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-dest": "document",
-            "accept-language": "ar-EG,ar;q=0.9",
-            "priority": "u=0, i"
+            "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
         };
         if (referer) headers["Referer"] = referer;
         return headers;
     }
 
-    async function getBaseUrl() {
-        if (redirectUrl) return redirectUrl;
-        try {
-            const res = await http_get(mainUrl);
-            if (res && res.url) {
-                const url = new URL(res.url);
-                redirectUrl = `${url.protocol}//${url.host}`;
-                return redirectUrl;
-            }
-        } catch (e) {}
-        return mainUrl;
-    }
-
-    function parseSearchResult(el, $, base) {
-    const $el = $(el);
-    let href = $el.find("a").first().attr("href")?.trim();
-    if (!href) return null;
-    if (href.startsWith("/")) href = `${base}${href}`;
-
-    const title = $el.find(".h1, .h4, .h5, .title, img").first().attr("alt")?.trim() 
-               || $el.find(".h1, .h4, .h5, .title").first().text().trim();
-
-    let posterUrl = $el.find("img").first().attr("data-src") 
-                 || $el.find("img").first().attr("src") 
-                 || $el.find("img").first().attr("data-lazy-src");
-    
-    posterUrl = posterUrl?.trim();
-    if (posterUrl?.startsWith("//")) posterUrl = "https:" + posterUrl;
-    if (posterUrl?.startsWith("/")) posterUrl = `${base}${posterUrl}`;
-
-    if (!title) return null;
-
-    return new MultimediaItem({
-        title: title,
-        url: href,
-        posterUrl: posterUrl,
-        type: "tv"
-    });
-}
-
-async function getHome(callback) {
-    try {
-        const base = await getBaseUrl();
-        // Startseite direkt abfragen (ohne /main)
-        const res = await http_get(`${base}/`, getHeaders());
-        const body = res.body || "";
+    // Hilfsfunktion: Sucht nach standardisierten Film-Blöcken im HTML
+    function extractItems(html, base) {
+        const items = [];
+        // Sucht grob nach Links, die Bilder und Titel enthalten (typisch für HDFilme)
+        const regex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+        let match;
         
-        // Root-Parser instanziieren
-        const $ = await parse_html(body);
-        const lists = {};
+        while ((match = regex.exec(html)) !== null) {
+            let url = match[1];
+            const innerHtml = match[2];
+            
+            // Überspringe ungültige Links
+            if (url.includes("javascript:") || url.includes("#")) continue;
 
-        // 1. Slider / Highlights
-        const sliderItems = [];
-        $("#homeSlide .swiper-slide, .carousel-item").each((_, el) => {
-            const item = parseSearchResult(el, $, base);
-            if (item) sliderItems.push(item);
-        });
-        if (sliderItems.length > 0) {
-            lists["أحدث الإضافات"] = sliderItems;
+            const imgMatch = innerHtml.match(/<img[^>]+(?:src|data-src)=["']([^"']+)["']/i);
+            const titleMatch = innerHtml.match(/alt=["']([^"']+)["']/i) || innerHtml.match(/<h[2-4][^>]*>([^<]+)<\/h[2-4]>/i) || innerHtml.match(/class=["'][^"']*(?:title|name)[^"']*["'][^>]*>([^<]+)<\//i);
+
+            if (url && imgMatch && titleMatch) {
+                if (url.startsWith("/")) url = `${base}${url}`;
+                let poster = imgMatch[1];
+                if (poster.startsWith("//")) poster = "https:" + poster;
+                if (poster.startsWith("/")) poster = `${base}${poster}`;
+
+                const title = titleMatch[1].replace(/<[^>]*>/g, "").trim();
+
+                // Vermeide Duplikate
+                if (!items.find(i => i.url === url)) {
+                    items.push(new MultimediaItem({
+                        title: title,
+                        url: url,
+                        posterUrl: poster,
+                        type: url.includes("serie") || url.includes("season") ? "tv" : "movie"
+                    }));
+                }
+            }
         }
-
-        // 2. Neueste Beiträge / Katalog
-        const mainItems = [];
-        $("div.postDiv, div.post-item").each((_, el) => {
-            const item = parseSearchResult(el, $, base);
-            if (item) mainItems.push(item);
-        });
-        if (mainItems.length > 0) {
-            lists["الرئيسية"] = mainItems;
-        }
-
-        if (Object.keys(lists).length === 0) {
-            return callback({ success: false, errorCode: "HOME_ERROR", message: "Keine Inhalte gefunden" });
-        }
-
-        callback({ success: true, data: lists });
-    } catch (e) {
-        callback({ success: false, errorCode: "HOME_ERROR", message: e.message });
+        return items;
     }
-}
+
+    async function getHome(callback) {
+        try {
+            const res = await http_get(mainUrl, getHeaders());
+            const body = res.body || "";
+            
+            const items = extractItems(body, mainUrl);
+            
+            if (items.length === 0) {
+                return callback({ success: false, errorCode: "HOME_ERROR", message: "Keine Filme auf der Startseite gefunden." });
+            }
+
+            callback({ success: true, data: { "Filme & Serien": items } });
+        } catch (e) {
+            callback({ success: false, errorCode: "HOME_ERROR", message: e.message });
+        }
+    }
 
     async function search(query, callback) {
         try {
-            const base = await getBaseUrl();
-            const searchUrl = `${base}/?s=${encodeURIComponent(query)}`;
-            const res = await http_get(searchUrl, getHeaders(base));
-            const body = res.body || "";
-            const items = [];
-
-            const posts = await parse_html(body, "div#postList div.postDiv, div.postDiv, article");
-            if (posts) {
-                posts.forEach(el => {
-                    const item = parseSearchResult(el, parse_html);
-                    if (item) items.push(item);
-                });
-            }
-
+            // HDFilme nutzt oft /search?keyword= oder /?s=
+            const searchUrl = `${mainUrl}/?s=${encodeURIComponent(query)}`;
+            const res = await http_get(searchUrl, getHeaders(mainUrl));
+            
+            const items = extractItems(res.body || "", mainUrl);
             callback({ success: true, data: items });
         } catch (e) {
             callback({ success: false, errorCode: "SEARCH_ERROR", message: e.message });
@@ -126,47 +82,40 @@ async function getHome(callback) {
 
     async function load(url, callback) {
         try {
-            const base = await getBaseUrl();
-            const absoluteUrl = url.startsWith("/") ? `${base}${url}` : url;
-            const res = await http_get(absoluteUrl, getHeaders(base));
+            const res = await http_get(url, getHeaders(mainUrl));
             const body = res.body || "";
 
-            const titleMatch = body.match(/<h1[^>]*>(.*?)<\/h1>/);
+            // Titel extrahieren
+            const titleMatch = body.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || body.match(/<title>([^<]+)<\/title>/i);
             const title = titleMatch ? titleMatch[1].replace(/<[^>]*>/g, "").trim() : "Unbekannt";
             
-            const descMatch = body.match(/<div class="singleDesc"[^>]*>([\s\S]*?)<\/div>/);
+            // Beschreibung
+            const descMatch = body.match(/<div class=["'](?:description|summary|content)["'][^>]*>([\s\S]*?)<\/div>/i) || body.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
             const description = descMatch ? descMatch[1].replace(/<[^>]*>/g, "").trim() : "";
 
-            const posterMatch = body.match(/<meta itemprop="image" content="([^"]+)"/);
+            // Poster
+            const posterMatch = body.match(/<meta property=["']og:image["'] content=["']([^"']+)["']/i);
             const posterUrl = posterMatch ? posterMatch[1] : null;
 
-            const episodes = [];
-            const epElements = await parse_html(body, "div#epAll a");
-            if (epElements) {
-                epElements.forEach((el, index) => {
-                    const epUrl = el.attr?.("href") || "";
-                    const epText = el.text || `Episode ${index + 1}`;
-                    const numMatch = epText.match(/\d+/);
-                    const epNum = numMatch ? parseInt(numMatch[0]) : index + 1;
-
-                    episodes.push(new Episode({
-                        name: epText.trim(),
-                        url: epUrl.startsWith("http") ? epUrl : `${base}${epUrl}`,
-                        season: 1,
-                        episode: epNum,
-                        headers: getHeaders(absoluteUrl)
-                    }));
-                });
-            }
+            // Episoden oder einzelner Film? (Einfacher Fallback: Ein Eintrag für den Film)
+            const episodes = [
+                new Episode({
+                    name: "Film / Episode abspielen",
+                    url: url,
+                    season: 1,
+                    episode: 1,
+                    headers: getHeaders(url)
+                })
+            ];
 
             const mediaItem = new MultimediaItem({
                 title: title,
-                url: absoluteUrl,
+                url: url,
                 posterUrl: posterUrl,
                 description: description,
-                type: "tv",
+                type: "movie", // Standardmäßig als Film behandeln
                 episodes: episodes,
-                headers: getHeaders(absoluteUrl)
+                headers: getHeaders(url)
             });
 
             callback({ success: true, data: mediaItem });
@@ -181,28 +130,29 @@ async function getHome(callback) {
             const body = res.body || "";
             const streams = [];
 
-            // Iframe-Extraktion & Stream-Findung analog zum funktionierenden Standard
-            const iframeMatch = body.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-            if (iframeMatch) {
+            // Suche nach iFrames (Video-Playern)
+            const iframeRegex = /<iframe[^>]+src=["']([^"']+)["']/gi;
+            let iframeMatch;
+            
+            while ((iframeMatch = iframeRegex.exec(body)) !== null) {
                 let iframeUrl = iframeMatch[1];
                 if (iframeUrl.startsWith("//")) iframeUrl = "https:" + iframeUrl;
 
+                // Streams aus dem iFrame extrahieren
                 const frameRes = await http_get(iframeUrl, getHeaders(episodeUrl));
                 const frameBody = frameRes.body || "";
                 
-                const fileMatches = frameBody.match(/file\s*:\s*['"]([^'"]+\.m3u8[^'"]*)['"]/g);
-                if (fileMatches) {
-                    fileMatches.forEach(m => {
-                        const matchUrl = m.match(/['"]([^'"]+)['"]/);
-                        if (matchUrl && matchUrl[1]) {
-                            streams.push(new StreamResult({
-                                url: matchUrl[1],
-                                quality: 720,
-                                isM3U8: true,
-                                headers: { "Referer": iframeUrl, "User-Agent": userAgent }
-                            }));
-                        }
-                    });
+                // M3U8 oder MP4 Links im Player-Code finden
+                const fileRegex = /['"]([^'"]+\.(?:m3u8|mp4)[^'"]*)['"]/gi;
+                let fileMatch;
+                
+                while ((fileMatch = fileRegex.exec(frameBody)) !== null) {
+                    streams.push(new StreamResult({
+                        url: fileMatch[1],
+                        quality: 720, // Standardwert
+                        isM3U8: fileMatch[1].includes(".m3u8"),
+                        headers: { "Referer": iframeUrl, "User-Agent": userAgent }
+                    }));
                 }
             }
 
