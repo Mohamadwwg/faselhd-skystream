@@ -1,261 +1,302 @@
-(function () {
-    "use strict";
-    const NAME = "FaselHD";
+const cheerio = require('cheerio');
 
-    function getBaseUrl() {
-        if (typeof manifest !== "undefined" && manifest && manifest.baseUrl) {
-            return manifest.baseUrl.replace(/\/+$/, "");
-        }
-        return "www.fasel-hd.cam";
+class FASELHD {
+    constructor() {
+        this.name = "FASELHD";
+        this.mainUrl = "https://web31312x.faselhdx.bid";
+        this.lang = "ar";
+        this.userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
+        this.redirectUrl = null;
     }
 
-    function absoluteUrl(url) {
-        if (!url) return "";
-        if (url.startsWith("http://") || url.startsWith("https://")) return url;
-        if (url.startsWith("//")) return "https:" + url;
-        return new URL(url, getBaseUrl()).href;
+    getHeaders(referer = null) {
+        const headers = {
+            "User-Agent": this.userAgent,
+            "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "upgrade-insecure-requests": "1",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "accept-language": "ar-EG,ar;q=0.9",
+            "priority": "u=0, i"
+        };
+        if (referer) headers["Referer"] = referer;
+        return headers;
     }
 
-    function cleanText(value) {
-        if (!value) return "";
-        return value.replace(/\\n/g, " ").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-    }
-
-    function stripHtml(html) {
-        if (!html) return "";
-        return cleanText(
-            html
-                .replace(/<script[\s\S]*?<\/script>/gi, "")
-                .replace(/<style[\s\S]*?<\/style>/gi, "")
-                .replace(/<[^>]+>/g, " ")
-                .replace(/&nbsp;/gi, " ")
-                .replace(/&amp;/gi, "&")
-                .replace(/&#038;/gi, "&")
-                .replace(/&quot;/gi, '"')
-                .replace(/&#39;/gi, "'")
-                .replace(/&#8217;/gi, "'")
-                .replace(/&#8211;/gi, "-")
-        );
-    }
-
-    async function getDocument(url) {
+    async getBaseUrl() {
+        if (this.redirectUrl) return this.redirectUrl;
         try {
-            const baseUrl = getBaseUrl();
-            
-            const headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
-                "Referer": baseUrl + "/"
-            };
-
-            const httpFunc = typeof http_get_cloud === "function" ? http_get_cloud : http_get;
-            const response = await httpFunc(url, { headers });
-
-            if (!response) throw new Error("Empty HTTP response");
-
-            const html = typeof response === "string" 
-                ? response 
-                : response.body ?? response.data ?? String(response);
-
-            return html;
-        } catch (error) {
-            throw new Error(`HTTP GET failed: ${error.message || error}`);
+            const res = await fetch(this.mainUrl, { redirect: 'follow' });
+            const url = new URL(res.url);
+            this.redirectUrl = `${url.protocol}//${url.host}`;
+            return this.redirectUrl;
+        } catch (e) {
+            return this.mainUrl;
         }
     }
 
-    function extractCards(html) {
-        const results = [];
-        const matches = html.match(/<a[^>]+href=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi) || [];
-
-        for (const block of matches) {
-            const hrefMatch = block.match(/href=["']([^"']+)["']/i);
-            const imgMatch = block.match(/<img[^>]+(?:data-src|src|data-lazy-src)=["']([^"']+)["']/i);
-            const titleMatch = block.match(/alt=["']([^"']+)["']/i) 
-                            || block.match(/title=["']([^"']+)["']/i)
-                            || block.match(/<div[^>]*class=["'][^"']*h[1-6][^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
-
-            if (hrefMatch && imgMatch) {
-                const rawUrl = hrefMatch[1];
-                const url = absoluteUrl(rawUrl);
-                const title = titleMatch ? stripHtml(titleMatch[1] || titleMatch[2]) : "";
-                const posterUrl = absoluteUrl(imgMatch[1]);
-
-                const isValidContent = rawUrl.includes("/movies") || rawUrl.includes("/series") || rawUrl.includes("/episodes") || rawUrl.includes("/seasons") || rawUrl.includes("/watch");
-                const isNav = title === "الذهاب للرئيسية" || posterUrl.includes("logo-1.png") || title.length < 2;
-
-                if (isValidContent && !isNav && !results.some(item => item.url === url)) {
-                    results.push(new MultimediaItem({
-                        title: title || "FaselHD Title",
-                        url: url,
-                        posterUrl: posterUrl,
-                        type: (url.includes("series") || url.includes("episodes")) ? "series" : "movie"
-                    }));
-                }
-            }
-        }
-
-        return results;
+    async smartGet(url, referer = null) {
+        let cleanUrl = (!url.endsWith("/") && !url.split('/').pop().includes(".")) ? `${url}/` : url;
+        const res = await fetch(cleanUrl, {
+            method: 'GET',
+            headers: this.getHeaders(referer)
+        });
+        const text = await res.text();
+        return cheerio.load(text);
     }
 
-    async function getHome(cb) {
-        try {
-            const baseUrl = getBaseUrl();
-            
-            // 1. Lade direkt die Film-Übersichtsseite
-            const moviesHtml = await getDocument(`${baseUrl}/all-movies`);
-            const movieItems = extractCards(moviesHtml);
+    parseSearchResult($, element) {
+        const el = $(element);
+        const href = el.find("a").first().attr("href")?.trim();
+        const title = el.find(".h1, .h4, .h5").first().text().trim();
+        let posterUrl = el.find("img").first().attr("data-src") || el.find("img").first().attr("src");
+        posterUrl = posterUrl?.trim();
 
-            // 2. Lade optional Anime-Filme/Serien für eine weitere Kategorie
-            const animeHtml = await getDocument(`${baseUrl}/anime-movies`);
-            const animeItems = extractCards(animeHtml);
-
-            if (movieItems.length > 0 || animeItems.length > 0) {
-                const data = {
-                    "Trending Filme": movieItems.slice(0, 12),
-                    "Anime": animeItems.slice(0, 12)
-                };
-                cb({ success: true, data });
-            } else {
-                throw new Error("Keine Inhalte in den Kategorien gefunden.");
-            }
-        } catch (error) {
-            console.error(`${NAME} getHome Error:`, error);
-            cb({ success: false, errorCode: "NETWORK_ERROR", message: String(error) });
-        }
-    }
-     
-    async function search(query, cb) {
-        try {
-            const baseUrl = getBaseUrl();
-            const cleanQuery = query.trim();
-
-            let searchUrl = `${baseUrl}/search/${encodeURIComponent(cleanQuery)}`;
-            let html = await getDocument(searchUrl);
-            let items = extractCards(html);
-
-            if (!items || items.length === 0) {
-                searchUrl = `${baseUrl}/?s=${encodeURIComponent(cleanQuery)}`;
-                html = await getDocument(searchUrl);
-                items = extractCards(html);
-            }
-
-            cb({ success: true, data: items });
-        } catch (error) {
-            cb({ success: false, errorCode: "NETWORK_ERROR", message: String(error) });
-        }
-    }
-
-    async function load(url, cb) {
-        try {
-            const html = await getDocument(url);
-
-            let posterUrl = 
-                html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i)?.[1] ||
-                html.match(/<div\s+class=["'][^"']*poster[^"']*["'][^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i)?.[1] ||
-                html.match(/<div\s+class=["'][^"']*poster[^"']*["'][^>]*>[\s\S]*?<img[^>]+data-src=["']([^"']+)["']/i)?.[1] ||
-                "";
-
-            let description = 
-                html.match(/<div\s+class=["'][^"']*(?:single-desc|story|post-story|description)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ||
-                html.match(/<meta\s+(?:property|name)=["'](?:og:description|description)["']\s+content=["']([^"']+)["']/i)?.[1] || 
-                "";
-
-            description = stripHtml(description);
-
-            let rawTitle = html.match(/<title>([^<]+)<\/title>/i)?.[1] || "";
-            let title = stripHtml(rawTitle).replace(/\s*-\s*فاصل إعلاني.*/i, "").trim();
-
-            const streams = [];
-            const iframeMatch = html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-            if (iframeMatch) {
-                streams.push({
-                    name: "FaselHD Player",
-                    url: iframeMatch[1],
-                    type: "hls"
-                });
-            }
-
-            const data = {
-                type: "movie",
-                status: "ongoing",
-                playbackPolicy: "none",
-                isAdult: false,
-                streams: streams,
-                syncData: {},
-                title: title || rawTitle,
-                url: url,
-                posterUrl: posterUrl,
-                description: description
-            };
-
-            cb({ success: true, data: data });
-        } catch (error) {
-            cb({ success: false, errorCode: "NETWORK_ERROR", message: String(error) });
-        }
-    }
-
-    async function resolveStream(url, cb) {
-        try {
-            const html = await getDocument(url);
-
-            // Verschiedene Regex-Muster für Stream-URLs auf FaselHD
-            const streamMatch = 
-                html.match(/["'](?<url>https?:\/\/[^"']+\.m3u8[^"']*)["']/i) ||
-                html.match(/file:\s*["'](?<url>[^"']+)["']/i) ||
-                html.match(/src:\s*["'](?<url>[^"']+)["']/i) ||
-                html.match(/<source[^>]+src=["'](?<url>[^"']+)["']/i);
-
-            const directUrl = streamMatch?.groups?.url || streamMatch?.[1];
-
-            if (directUrl && directUrl.startsWith("http")) {
-                cb({
-                    success: true,
-                    data: {
-                        url: directUrl,
-                        type: directUrl.includes(".m3u8") ? "hls" : "mp4",
-                        headers: {
-                            "Referer": getBaseUrl() + "/",
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-                        }
-                    }
-                });
-            } else {
-                // Fallback auf die Iframe-/Player-URL
-                cb({
-                    success: true,
-                    data: {
-                        url: url,
-                        type: "hls",
-                        headers: {
-                            "Referer": getBaseUrl() + "/"
-                        }
-                    }
-                });
-            }
-        } catch (error) {
-            cb({ success: false, errorCode: "NETWORK_ERROR", message: String(error) });
-        }
-    }
-
-    async function loadStreams(url, cb) {
-        cb({ success: true, data: [] });
-    }
-
-    // Registrierung im Skystream-Umfeld
-    globalThis.getHome = getHome;
-    globalThis.search = search;
-    globalThis.load = load;
-    globalThis.resolveStream = resolveStream;
-    globalThis.loadStreams = loadStreams;
-
-    if (typeof module !== "undefined" && module.exports) {
-        module.exports = {
-            getHome,
-            search,
-            load,
-            resolveStream,
-            loadStreams
+        if (!href || !title) return null;
+        
+        return {
+            name: title,
+            url: href,
+            posterUrl: posterUrl,
+            type: "TvSeries"
         };
     }
-})();
+
+    async getMainPage() {
+        const $ = await this.smartGet(`${this.mainUrl}/main`);
+        const lists = [];
+
+        // Neueste Hinzufügungen (Slider)
+        const sliderItems = [];
+        $("#homeSlide .swiper-slide").each((i, el) => {
+            const item = this.parseSearchResult($, el);
+            if (item) {
+                item.name = $(el).find(".h1 a").text().trim() || item.name;
+                sliderItems.push(item);
+            }
+        });
+        if (sliderItems.length > 0) {
+            lists.push({ title: "أحدث الإضافات", items: sliderItems });
+        }
+
+        // Hauptblöcke
+        $("section#blockList").each((i, block) => {
+            const title = $(block).find(".blockHead .h3").first().text().trim();
+            const items = [];
+            $(block).find(".blockMovie, .postDiv, .epDivHome").each((j, el) => {
+                const item = this.parseSearchResult($, el);
+                if (item) items.push(item);
+            });
+            if (items.length > 0) lists.push({ title, items });
+        });
+
+        // Meistgesehen
+        $("div.slider").each((i, block) => {
+            const h4Text = $(block).find(".h4").text();
+            if (h4Text && h4Text.includes("مشاهدة")) {
+                const title = h4Text.trim() || "الأكثر مشاهدة";
+                const items = [];
+                $(block).find(".itemviews .postDiv").each((j, el) => {
+                    const item = this.parseSearchResult($, el);
+                    if (item) items.push(item);
+                });
+                if (items.length > 0) lists.push({ title, items });
+            }
+        });
+
+        return lists;
+    }
+
+    async search(query, page = 1) {
+        const base = await this.getBaseUrl();
+        const encoded = encodeURIComponent(query);
+        const searchUrl = page === 1 ? `${base}/?s=${encoded}` : `${base}/page/${page}/?s=${encoded}`;
+
+        let $ = await this.smartGet(searchUrl, base);
+        let items = [];
+
+        $("div#postList div.postDiv, div.postDiv, article").each((i, el) => {
+            const item = this.parseSearchResult($, el);
+            if (item) items.push(item);
+        });
+
+        // Fallback über AJAX (dtc_live)
+        if (items.length === 0 && page === 1) {
+            try {
+                const ajaxUrl = `${base}/wp-admin/admin-ajax.php`;
+                const formData = new URLSearchParams();
+                formData.append('action', 'dtc_live');
+                formData.append('trsearch', query);
+
+                const res = await fetch(ajaxUrl, {
+                    method: 'POST',
+                    headers: { ...this.getHeaders(searchUrl), 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData.toString()
+                });
+                
+                const bodyStr = await res.text();
+                if (bodyStr) {
+                    $ = cheerio.load(bodyStr);
+                    $("div.postDiv, article, .result, .search-item").each((i, el) => {
+                        const item = this.parseSearchResult($, el);
+                        if (item) items.push(item);
+                    });
+                }
+            } catch (e) {
+                console.error("AJAX Search Error:", e);
+            }
+        }
+        return items;
+    }
+
+    async loadInfo(url) {
+        const base = await this.getBaseUrl();
+        const absoluteUrl = url.startsWith("/") ? `${base}${url}` : url;
+        const $ = await this.smartGet(absoluteUrl);
+
+        const rawTitle = $(".singleInfo .title.h1").first().contents().filter(function() {
+            return this.nodeType === 3;
+        }).text();
+        const title = rawTitle.replace(/\\n|\n/g, "").trim();
+        if (!title) return null;
+
+        const plot = $(".singleDesc p, .story p").first().text().replace(/\\n|\n/g, " ").trim();
+        const poster = $("meta[itemprop=image]").attr("content") || $(".posterImg img.poster").attr("src");
+        
+        let backgroundPoster = null;
+        const style = $("div.singlePage").attr("style");
+        if (style) {
+            const match = style.match(/url\(['"]?(.*?)['"]?\)/);
+            if (match && match[1]) backgroundPoster = match[1];
+        }
+
+        const episodes = [];
+        $("div#epAll a").each((i, el) => {
+            const epUrlRaw = $(el).attr("href")?.trim();
+            if (epUrlRaw) {
+                const epTitle = $(el).text().replace(/\\n|\n/g, "").trim();
+                const epNumMatch = epTitle.match(/\d+/);
+                const epNum = epNumMatch ? parseInt(epNumMatch[0]) : null;
+                
+                episodes.push({
+                    name: epTitle,
+                    episode: epNum,
+                    season: 1,
+                    url: epUrlRaw.startsWith("http") ? epUrlRaw : `${base}${epUrlRaw}`,
+                });
+            }
+        });
+
+        return {
+            title,
+            url: absoluteUrl,
+            poster,
+            backgroundPoster,
+            plot,
+            episodes: episodes
+        };
+    }
+
+    // Native Entschlüsselung der Encrypted-URLs aus der Kotlin-Beispieldatei
+    decryptUrl(url) {
+        if (!url || !url.startsWith('enc:')) return url;
+        const key1 = "V2@%YSU2B]G~";
+        const key2 = "bv0fim4qf17";
+
+        const ie = (c) => {
+            const x = c.charCodeAt(0);
+            if (x >= 97 && x <= 122) return x - 97;
+            if (x >= 65 && x <= 90) return x - 65 + 26;
+            if (x >= 48 && x <= 57) return x - 48 + 52;
+            if (x === 43) return 62;
+            if (x === 47) return 63;
+            return 0;
+        };
+        const bn = (x) => {
+            if (x <= 25) return String.fromCharCode(x + 97);
+            if (x <= 51) return String.fromCharCode(x - 26 + 65);
+            if (x <= 61) return String.fromCharCode(x - 52 + 48);
+            if (x === 62) return '+';
+            if (x === 63) return '/';
+            return ' ';
+        };
+        const dec = (e, k) => {
+            let r = '';
+            for (let i = 0; i < e.length; i++) {
+                const kc = k[i % (k.length - 1)];
+                const M = ie(e[i]) - ie(kc);
+                r += bn(M < 0 ? M + 64 : M);
+            }
+            return r;
+        };
+        try {
+            return dec(dec(url.substring(4), key2), key1);
+        } catch (e) {
+            return url;
+        }
+    }
+
+    async getLinks(url) {
+        const $ = await this.smartGet(url);
+        const iframeUrls = new Set();
+        const blockedKeywords = ["google.com/recaptcha", "google.com/ads", "googlesyndication.com", "googletagmanager.com"];
+
+        const addResult = (src) => {
+            if (src && !blockedKeywords.some(k => src.includes(k))) iframeUrls.add(src);
+        };
+
+        $("iframe[src]").each((i, el) => addResult($(el).attr("src")));
+
+        $("[onclick]").each((i, el) => {
+            const onclick = $(el).attr("onclick");
+            const match = onclick?.match(/player_iframe\.location\.href\s*=\s*['"]([^'"]+)['"]/);
+            if (match) addResult(match[1]);
+        });
+
+        const links = [];
+
+        for (let iframeUrl of iframeUrls) {
+            if (!iframeUrl.startsWith("http")) continue;
+
+            try {
+                const frameRes = await fetch(iframeUrl, {
+                    headers: this.getHeaders(url)
+                });
+                const frameText = await frameRes.text();
+                
+                const sourceMatches = frameText.match(/file\s*:\s*['"]([^'"]+)['"]/g);
+                
+                if (sourceMatches) {
+                    sourceMatches.forEach(match => {
+                        const fileMatch = match.match(/['"]([^'"]+)['"]/);
+                        if (fileMatch && fileMatch[1]) {
+                            let streamUrl = fileMatch[1];
+                            
+                            if (streamUrl.startsWith('enc:')) {
+                                streamUrl = this.decryptUrl(streamUrl);
+                            }
+
+                            if (streamUrl.includes('.m3u8')) {
+                                links.push({
+                                    url: streamUrl,
+                                    quality: 'Auto',
+                                    isM3U8: true,
+                                    headers: { "Referer": iframeUrl, "User-Agent": this.userAgent }
+                                });
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Iframe fetch error:", iframeUrl, e);
+            }
+        }
+        return links;
+    }
+}
+
+module.exports = FASELHD;
