@@ -34,77 +34,73 @@ const PluginModule = (() => {
         return mainUrl;
     }
 
-    function parseSearchResult(html, $) {
-        const el = $(html);
-        const href = el.find("a").first().attr("href")?.trim();
-        const title = el.find(".h1, .h4, .h5").first().text().trim();
-        let posterUrl = el.find("img").first().attr("data-src") || el.find("img").first().attr("src");
-        posterUrl = posterUrl?.trim();
+    function parseSearchResult(el, $, base) {
+    const $el = $(el);
+    let href = $el.find("a").first().attr("href")?.trim();
+    if (!href) return null;
+    if (href.startsWith("/")) href = `${base}${href}`;
 
-        if (!href || !title) return null;
+    const title = $el.find(".h1, .h4, .h5, .title, img").first().attr("alt")?.trim() 
+               || $el.find(".h1, .h4, .h5, .title").first().text().trim();
 
-        return new MultimediaItem({
-            title: title,
-            url: href,
-            posterUrl: posterUrl,
-            type: "tv"
+    let posterUrl = $el.find("img").first().attr("data-src") 
+                 || $el.find("img").first().attr("src") 
+                 || $el.find("img").first().attr("data-lazy-src");
+    
+    posterUrl = posterUrl?.trim();
+    if (posterUrl?.startsWith("//")) posterUrl = "https:" + posterUrl;
+    if (posterUrl?.startsWith("/")) posterUrl = `${base}${posterUrl}`;
+
+    if (!title) return null;
+
+    return new MultimediaItem({
+        title: title,
+        url: href,
+        posterUrl: posterUrl,
+        type: "tv"
+    });
+}
+
+async function getHome(callback) {
+    try {
+        const base = await getBaseUrl();
+        // Startseite direkt abfragen (ohne /main)
+        const res = await http_get(`${base}/`, getHeaders());
+        const body = res.body || "";
+        
+        // Root-Parser instanziieren
+        const $ = await parse_html(body);
+        const lists = {};
+
+        // 1. Slider / Highlights
+        const sliderItems = [];
+        $("#homeSlide .swiper-slide, .carousel-item").each((_, el) => {
+            const item = parseSearchResult(el, $, base);
+            if (item) sliderItems.push(item);
         });
-    }
-
-    async function getHome(callback) {
-        try {
-            const base = await getBaseUrl();
-            const res = await http_get(`${base}/main`, getHeaders());
-            const body = res.body || "";
-            const $ = await parse_html(body);
-            
-            const lists = {};
-            const sliderItems = [];
-
-            // Slider / Neueste
-            const slides = await parse_html(body, "#homeSlide .swiper-slide");
-            if (slides) {
-                slides.forEach(el => {
-                    const item = parseSearchResult(el, parse_html);
-                    if (item) sliderItems.push(item);
-                });
-            }
-            if (sliderItems.length > 0) {
-                lists["أحدث الإضافات"] = sliderItems;
-            }
-
-            // Blöcke auslesen
-            const blocks = await parse_html(body, "section#blockList");
-            if (blocks) {
-                blocks.forEach(block => {
-                    // Da parse_html in SkyStream je nach Version variiert, fangen wir Standardstrukturen ab
-                });
-            }
-
-            if (Object.keys(lists).length === 0) {
-                // Fallback: Hauptseite direkt parsen
-                const fallbackItems = [];
-                const posts = await parse_html(body, "div.postDiv");
-                if (posts) {
-                    posts.forEach(el => {
-                        const item = parseSearchResult(el, parse_html);
-                        if (item) fallbackItems.push(item);
-                    });
-                }
-                if (fallbackItems.length > 0) {
-                    lists["الرئيسية"] = fallbackItems;
-                }
-            }
-
-            if (Object.keys(lists).length === 0) {
-                return callback({ success: false, errorCode: "HOME_ERROR", message: "Keine Inhalte gefunden" });
-            }
-
-            callback({ success: true, data: lists });
-        } catch (e) {
-            callback({ success: false, errorCode: "HOME_ERROR", message: e.message });
+        if (sliderItems.length > 0) {
+            lists["أحدث الإضافات"] = sliderItems;
         }
+
+        // 2. Neueste Beiträge / Katalog
+        const mainItems = [];
+        $("div.postDiv, div.post-item").each((_, el) => {
+            const item = parseSearchResult(el, $, base);
+            if (item) mainItems.push(item);
+        });
+        if (mainItems.length > 0) {
+            lists["الرئيسية"] = mainItems;
+        }
+
+        if (Object.keys(lists).length === 0) {
+            return callback({ success: false, errorCode: "HOME_ERROR", message: "Keine Inhalte gefunden" });
+        }
+
+        callback({ success: true, data: lists });
+    } catch (e) {
+        callback({ success: false, errorCode: "HOME_ERROR", message: e.message });
     }
+}
 
     async function search(query, callback) {
         try {
