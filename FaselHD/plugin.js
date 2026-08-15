@@ -6,7 +6,7 @@
         if (typeof manifest !== "undefined" && manifest && manifest.baseUrl) {
             return manifest.baseUrl.replace(/\/+$/, "");
         }
-        return "https://web31312x.faselhdx.bid";
+        return "www.fasel-hd.cam";
     }
 
     function absoluteUrl(url) {
@@ -101,30 +101,30 @@
     async function getHome(cb) {
         try {
             const baseUrl = getBaseUrl();
-            let html = await getDocument(`${baseUrl}/all-movies`);
-            let items = extractCards(html);
+            
+            // 1. Lade direkt die Film-Übersichtsseite
+            const moviesHtml = await getDocument(`${baseUrl}/all-movies`);
+            const movieItems = extractCards(moviesHtml);
 
-            if (items.length === 0) {
-                html = await getDocument(`${baseUrl}/`);
-                items = extractCards(html);
-            }
+            // 2. Lade optional Anime-Filme/Serien für eine weitere Kategorie
+            const animeHtml = await getDocument(`${baseUrl}/anime-movies`);
+            const animeItems = extractCards(animeHtml);
 
-            if (items.length > 0) {
+            if (movieItems.length > 0 || animeItems.length > 0) {
                 const data = {
-                    "Trending": items.slice(0, 10),
-                    "Neu auf FaselHD": items.slice(10)
+                    "Trending Filme": movieItems.slice(0, 12),
+                    "Anime": animeItems.slice(0, 12)
                 };
                 cb({ success: true, data });
             } else {
-                const snippet = stripHtml(html).substring(0, 200);
-                throw new Error(`Keine Filme gefunden. Inhalt der Seite: "${snippet}"`);
+                throw new Error("Keine Inhalte in den Kategorien gefunden.");
             }
         } catch (error) {
             console.error(`${NAME} getHome Error:`, error);
             cb({ success: false, errorCode: "NETWORK_ERROR", message: String(error) });
         }
     }
-
+     
     async function search(query, cb) {
         try {
             const baseUrl = getBaseUrl();
